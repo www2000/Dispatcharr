@@ -1,0 +1,16 @@
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .api_views import EPGSourceViewSet, ProgramViewSet, EPGGridAPIView, EPGImportAPIView
+
+app_name = 'epg'
+
+router = DefaultRouter()
+router.register(r'sources', EPGSourceViewSet, basename='epg-source')
+router.register(r'programs', ProgramViewSet, basename='program')
+
+urlpatterns = [
+    path('grid/', EPGGridAPIView.as_view(), name='epg_grid'),
+    path('import/', EPGImportAPIView.as_view(), name='epg_import'),
+]
+
+urlpatterns += router.urls

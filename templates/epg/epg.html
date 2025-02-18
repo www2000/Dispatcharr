@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}EPG Management - Dispatcharr{% endblock %}
+{% block page_header %}EPG Management{% endblock %}
+{% block content %}
+
+<div class="container">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title">EPG Sources</h3>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEPGModal">Add EPG</button>
+        </div>
+        <div class="card-body">
+            <table id="epgTable" class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Source Type</th>
+                        <th>URL/API Key</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for epg in epg_sources %}
+                    <tr>
+                        <td>{{ epg.name }}</td>
+                        <td>{{ epg.source_type }}</td>
+                        <td>{{ epg.url|default:epg.api_key }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-warning" onclick="editEPG({{ epg.id }})">Edit</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteEPG({{ epg.id }})">Delete</button>
+                            <button class="btn btn-sm btn-info" onclick="refreshEPG({{ epg.id }})">Refresh</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add EPG Modal -->
+<div class="modal fade" id="addEPGModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add EPG Source</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="epgForm">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-control" id="epgName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">EPG URL</label>
+                        <input type="url" class="form-control" id="epgURL">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">API Key</label>
+                        <input type="text" class="form-control" id="epgAPIKey">
+                    </div>
+                    <button type="submit" class="btn btn-success">Save</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

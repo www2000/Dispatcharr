@@ -1,0 +1,855 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Streams Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- ============== LEFT: CHANNELS ============== -->
+    <div class="col-lg-7 col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title">Channels</h3>
+                <div>
+                    <button class="btn btn-warning btn-sm" id="autoAssignBtn">
+                        <i class="fa-solid fa-sort-numeric-up"></i> Auto Assign
+                    </button>
+                    <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#addChannelModal">
+                        <i class="fa-solid fa-plus"></i> Add Channel
+                    </button>
+                    <button id="deleteSelectedChannelsBtn" class="btn btn-danger btn-sm">
+                        <i class="fa-solid fa-trash"></i> Delete Selected
+                    </button>
+
+                    <!-- Example placeholders for HDHR/M3U/EPG links -->
+                    <button class="btn btn-info btn-sm me-1">
+                        HDHR URL
+                    </button>
+                    <button class="btn btn-secondary btn-sm me-1">
+                        M3U URL
+                    </button>
+                    <button class="btn btn-warning btn-sm">
+                        EPG
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-2">
+                <table id="channelsTable" class="table table-hover table-sm w-100">
+                    <thead>
+                      <tr>
+                        <th style="width:30px;">
+                          <input type="checkbox" id="selectAllChannels">
+                        </th>
+                        <th>#</th>
+                        <th>Logo</th>
+                        <th>Name</th>
+                        <th>EPG</th>
+                        <th>Group</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody><!-- Loaded via Ajax --></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============== RIGHT: STREAMS ============== -->
+    <div class="col-lg-5 col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title">Streams</h3>
+                <div>
+                    <button id="createChannelsFromStreamsBtn" class="btn btn-primary btn-sm">
+                        <i class="fa-solid fa-plus"></i> Create Channels
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-2">
+                <table id="streamsTable" class="table table-hover table-sm w-100">
+                    <thead>
+                        <tr>
+                            <th style="width:30px;">
+                                <input type="checkbox" id="selectAllStreams">
+                            </th>
+                            <th>Stream Name</th>
+                            <th>Group</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody><!-- Loaded via Ajax --></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== ACTION BUTTONS ===================== -->
+<div class="mb-3">
+  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#refreshModal">
+    <i class="fa-solid fa-sync"></i> Refresh M3U
+  </button>
+  <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#backupModal">
+    <i class="fa-solid fa-download"></i> Backup
+  </button>
+  <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#restoreModal">
+    <i class="fa-solid fa-upload"></i> Restore
+  </button>
+</div>
+
+<!-- ================== INCLUDE ALL MODALS ================== -->
+{% include "channels/modals/add_channel.html" %}
+{% include "channels/modals/edit_channel.html" %}
+{% include "channels/modals/edit_logo.html" %}
+{% include "channels/modals/delete_channel.html" %}
+{% include "channels/modals/delete_stream.html" %}
+{% include "channels/modals/add_m3u.html" %}
+{% include "channels/modals/edit_m3u.html" %}
+{% include "channels/modals/add_group.html" %}
+{% include "channels/modals/delete_m3u.html" %}
+{% include "channels/modals/backup.html" %}
+{% include "channels/modals/restore.html" %}
+{% include "channels/modals/refresh.html" %}
+
+<!-- ================== OPTIONAL STYLES / DATATABLES CSS ============== -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.3.6/css/buttons.dataTables.min.css">
+
+<!-- ============== JS Dependencies ============== -->
+<script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<!-- ============== MAIN SCRIPT ============== -->
+<script>
+$(document).ready(function () {
+
+    ////////////////////////////////////////////////////////////////////////////
+    // CSRF Setup for Django
+    ////////////////////////////////////////////////////////////////////////////
+    $.ajaxSetup({
+      headers: { "X-CSRFToken": "{{ csrf_token }}" }
+    });
+
+    ////////////////////////////////////////////////////////////////////////////
+    // 1) Channels DataTable
+    ////////////////////////////////////////////////////////////////////////////
+    const channelsDataTable = $("#channelsTable").DataTable({
+      ajax: {
+        url: "/api/channels/channels/",
+        dataSrc: ""
+      },
+      columns: [
+        {
+          data: "id",
+          render: (data) => `<input type="checkbox" class="channel-checkbox" data-channel-id="${data}">`,
+          orderable: false,
+          searchable: false
+        },
+        { data: "channel_number" },
+        {
+          data: "logo_url",
+          render: (logoUrl, type, row) => {
+            const safeLogo = logoUrl || "/static/default-logo.png";
+            return `
+              <img src="${safeLogo}"
+                   alt="logo"
+                   style="width:40px; height:40px; object-fit:contain; cursor:pointer;"
+                   data-bs-toggle="modal"
+                   data-bs-target="#editLogoModal"
+                   data-channelid="${row.id}"
+                   data-channelname="${row.channel_name}"
+                   data-logourl="${safeLogo}">
+            `;
+          },
+          orderable: false,
+          searchable: false
+        },
+        { data: "channel_name" },
+        {
+          data: "tvg_name",
+          render: (tvgName) => tvgName || "[n/a]"
+        },
+        {
+          data: "channel_group",
+          render: (group) => group?.name || ""
+        },
+        {
+          data: "id",
+          render: function (data, type, row) {
+            return `
+              <button class="btn btn-info btn-sm"
+                      data-bs-toggle="modal"
+                      data-bs-target="#editChannelModal"
+                      data-channelid="${data}">
+                  <i class="fa-solid fa-edit"></i>
+              </button>
+              <button class="btn btn-danger btn-sm"
+                      data-bs-toggle="modal"
+                      data-bs-target="#deleteChannelModal"
+                      data-channelid="${data}"
+                      data-channelname="${row.channel_name}">
+                  <i class="fa-solid fa-trash"></i>
+              </button>
+            `;
+          },
+          orderable: false,
+          searchable: false
+        }
+      ],
+      responsive: true,
+      pageLength: 10,
+      order: [[1, "asc"]]
+    });
+
+    // Helper to find next available channel_number by scanning loaded channels
+    function getNextChannelNumber() {
+      const allChannels = channelsDataTable.rows().data().toArray();
+      let maxNum = 0;
+      allChannels.forEach(ch => {
+        const chNum = parseInt(ch.channel_number, 10);
+        if (!isNaN(chNum) && chNum > maxNum) {
+          maxNum = chNum;
+        }
+      });
+      return maxNum + 1;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // 2) Streams DataTable
+    ////////////////////////////////////////////////////////////////////////////
+    const streamsDataTable = $("#streamsTable").DataTable({
+      ajax: {
+        url: "/api/channels/streams/",
+        dataSrc: ""
+      },
+      columns: [
+        {
+          data: "id",
+          render: (data) => `<input type="checkbox" class="stream-checkbox" data-stream-id="${data}">`,
+          orderable: false,
+          searchable: false
+        },
+        {
+          data: "name",
+          render: (name) => name || "Unnamed Stream"
+        },
+        {
+          data: "group_name",
+          render: (val) => val || ""
+        },
+        {
+          data: "id",
+          render: (data, type, row) => {
+            const name = row.name || "Stream";
+            return `
+              <div class="d-flex justify-content-center align-items-center">
+                <!-- If you have an “editStreamModal”, keep it. Otherwise remove. -->
+                <button class="btn btn-primary btn-sm edit-stream-btn mx-1"
+                        data-bs-toggle="modal"
+                        data-bs-target="#editStreamModal"
+                        data-stream-id="${data}"
+                        data-stream-name="${name}">
+                  <i class="fa-solid fa-edit"></i>
+                </button>
+                <button class="btn btn-danger btn-sm delete-stream-btn mx-1"
+                        data-bs-toggle="modal"
+                        data-bs-target="#deleteStreamModal"
+                        data-stream-id="${data}"
+                        data-stream-name="${name}">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+                <button class="btn btn-success btn-sm create-channel-from-stream-btn mx-1"
+                        data-stream-id="${data}"
+                        data-stream-name="${name}">
+                  <i class="fa-solid fa-plus"></i>
+                </button>
+              </div>
+            `;
+          },
+          orderable: false,
+          searchable: false
+        }
+      ],
+      responsive: true,
+      pageLength: 10
+    });
+
+    ////////////////////////////////////////////////////////////////////////////
+    // 3) Clicking the “+” in Streams => open “Add Channel” & auto‐fill channel name
+    ////////////////////////////////////////////////////////////////////////////
+    let newAvailableStreamsTable = null;
+    let newActiveStreamsTable = null;
+
+    // We'll do the actual logic inside a small function so we can reuse it:
+    function initAddChannelModal() {
+      // (A) Set next available channel number
+      $("#newChannelNumberField").val(getNextChannelNumber());
+
+      // (B) If not initialized, create the "Available" side as a DataTable
+      if (!newAvailableStreamsTable) {
+        newAvailableStreamsTable = $("#newAvailableStreamsTable").DataTable({
+          ajax: {
+            url: "/api/channels/streams/?unassigned=1",  // or your real unassigned filter
+            dataSrc: ""
+          },
+          columns: [
+            { data: "name" },
+            {
+              data: "m3u_name",
+              render: (val) => val || ""
+            },
+            {
+              data: "id",
+              render: (id, type, row) => `
+                <button class="btn btn-primary btn-sm addToActiveBtn">
+                  <i class="fa-solid fa-plus"></i>
+                </button>
+              `
+            }
+          ],
+          destroy: true,
+          searching: true,
+          paging: true,
+          pageLength: 5,
+          responsive: true
+        });
+      } else {
+        // re-load it
+        newAvailableStreamsTable.ajax.url("/api/channels/streams/?unassigned=1").load();
+      }
+
+      // (C) Same for "Active Streams" side
+      if (!newActiveStreamsTable) {
+        newActiveStreamsTable = $("#newActiveStreamsTable").DataTable({
+          columns: [
+            { data: "name" },
+            {
+              data: "m3u_name",
+              render: (val) => val || ""
+            },
+            {
+              data: "id",
+              render: (id, type, row) => `
+                <button class="btn btn-danger btn-sm removeFromActiveBtn">
+                  <i class="fa-solid fa-minus"></i>
+                </button>
+              `
+            }
+          ],
+          destroy: true,
+          searching: true,
+          paging: true,
+          pageLength: 5,
+          responsive: true
+        });
+      } else {
+        // Clear it out so we start fresh
+        newActiveStreamsTable.clear().draw();
+      }
+    }
+
+    // When user manually opens "Add Channel" (top button)
+    $("#addChannelModal").on("show.bs.modal", function () {
+      // Clear form fields
+      $("#newChannelNameField").val("");
+      $("#removeNewLogoButton").click(); // if you want to reset the logo preview
+
+      initAddChannelModal(); // sets channelNumber, loads DataTables
+    });
+
+    // If user clicks “+” in Streams => open the same Add Channel modal, but also set name
+    $("#streamsTable").on("click", ".create-channel-from-stream-btn", function () {
+      const rowData = streamsDataTable.row($(this).closest("tr")).data();
+      if (!rowData) return;
+
+      // Open the modal
+      const addModalEl = document.getElementById("addChannelModal");
+      const addModal = new bootstrap.Modal(addModalEl);
+      addModal.show();
+
+      // Wait until modal is shown to finish logic
+      setTimeout(() => {
+        // We know "initAddChannelModal" was called above, so channelNumber is set
+        // Now set the name from the stream:
+        $("#newChannelNameField").val(rowData.name || "");
+
+        // Move that stream from "Available" => "Active" if it’s found
+        const availableData = newAvailableStreamsTable.rows().data().toArray();
+        const match = availableData.find(s => s.id === rowData.id);
+        if (match) {
+          // remove from "available"
+          const idx = newAvailableStreamsTable.row((_, d) => d.id === rowData.id);
+          idx.remove().draw();
+          // add to "active"
+          newActiveStreamsTable.row.add(rowData).draw();
+        }
+      }, 400); // small delay to ensure DataTables have re‐initialized
+    });
+
+    // Move from “Available” => “Active”
+    $("#newAvailableStreamsTable").on("click", ".addToActiveBtn", function () {
+      const rowData = newAvailableStreamsTable.row($(this).closest("tr")).data();
+      newAvailableStreamsTable.row($(this).closest("tr")).remove().draw();
+      newActiveStreamsTable.row.add(rowData).draw();
+    });
+    // Move from “Active” => “Available”
+    $("#newActiveStreamsTable").on("click", ".removeFromActiveBtn", function () {
+      const rowData = newActiveStreamsTable.row($(this).closest("tr")).data();
+      newActiveStreamsTable.row($(this).closest("tr")).remove().draw();
+      newAvailableStreamsTable.row.add(rowData).draw();
+    });
+
+    // Submit => POST /api/channels/channels/ with “streams[]” appended
+    $("#addChannelForm").submit(function (e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+
+      // gather “active” streams
+      const activeRows = newActiveStreamsTable.rows().data().toArray();
+      activeRows.forEach((s) => {
+        formData.append("streams[]", s.id);
+      });
+
+      $.ajax({
+        url: "/api/channels/channels/",
+        type: "POST",
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function (createdChannel, status, xhr) {
+          if (xhr.status === 201 || xhr.status === 200) {
+            channelsDataTable.ajax.reload(null, false);
+            const modalEl = document.getElementById("addChannelModal");
+            bootstrap.Modal.getInstance(modalEl).hide();
+            Swal.fire("Channel Created", "New channel was added.", "success");
+          } else {
+            Swal.fire("Error", "Server did not return success code.", "error");
+          }
+        },
+        error: function () {
+          Swal.fire("Server Error", "Error creating channel.", "error");
+        }
+      });
+    });
+
+    ////////////////////////////////////////////////////////////////////////////
+    // 4) Bulk ops: “Delete Selected Channels”, “Auto Assign”, “Bulk Create Channels from Streams”
+    ////////////////////////////////////////////////////////////////////////////
+    $("#selectAllChannels").on("change", function () {
+      const checked = $(this).is(":checked");
+      $(".channel-checkbox").prop("checked", checked);
+    });
+
+    $("#deleteSelectedChannelsBtn").click(function () {
+      const channelIDs = [];
+      $(".channel-checkbox:checked").each(function () {
+        channelIDs.push($(this).data("channel-id"));
+      });
+      if (!channelIDs.length) {
+        Swal.fire("No channels selected", "Please select some channels.", "info");
+        return;
+      }
+      Swal.fire({
+        title: `Delete ${channelIDs.length} selected channels?`,
+        text: "This action cannot be undone!",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Yes, delete them!"
+      }).then((res) => {
+        if (res.isConfirmed) {
+          $.ajax({
+            url: "/api/channels/bulk-delete/",
+            type: "DELETE",
+            data: JSON.stringify({ channel_ids: channelIDs }),
+            contentType: "application/json",
+            success: function (data, status, xhr) {
+              if (xhr.status === 204) {
+                channelsDataTable.ajax.reload(null, false);
+                Swal.fire("Deleted!", "Selected channels have been deleted.", "success");
+              } else {
+                Swal.fire("Error", "Server did not return 204.", "error");
+              }
+            },
+            error: function () {
+              Swal.fire("Server Error", "Error sending bulk-delete request.", "error");
+            }
+          });
+        }
+      });
+    });
+
+    $("#autoAssignBtn").click(function () {
+      const channelIDs = [];
+      channelsDataTable.rows().every(function () {
+        channelIDs.push(this.data().id);
+      });
+      $.ajax({
+        url: "/api/channels/assign/",
+        method: "POST",
+        data: JSON.stringify({ channel_order: channelIDs }),
+        contentType: "application/json",
+        success: function (resp, status, xhr) {
+          if (xhr.status === 200) {
+            channelsDataTable.ajax.reload(null, false);
+            Swal.fire("Auto Assign", "Channels have been auto‐assigned!", "success");
+          } else {
+            Swal.fire("Auto Assign Failed", "No success response from server.", "error");
+          }
+        },
+        error: function () {
+          Swal.fire("Auto Assign Error", "An error occurred auto‐assigning channels.", "error");
+        }
+      });
+    });
+
+    $("#selectAllStreams").on("change", function () {
+      const checked = $(this).is(":checked");
+      $(".stream-checkbox").prop("checked", checked);
+    });
+
+    $("#createChannelsFromStreamsBtn").click(function () {
+      const streamIDs = [];
+      $(".stream-checkbox:checked").each(function () {
+        streamIDs.push($(this).data("stream-id"));
+      });
+      if (!streamIDs.length) {
+        Swal.fire("No streams selected", "Please select some streams.", "info");
+        return;
+      }
+      $.ajax({
+        url: "/api/channels/bulk-create/",
+        method: "POST",
+        data: JSON.stringify({ streams: streamIDs }),
+        contentType: "application/json",
+        success: function (resp, status, xhr) {
+          if (xhr.status === 201 || xhr.status === 200) {
+            channelsDataTable.ajax.reload(null, false);
+            Swal.fire("Channels Created", "Channels created successfully.", "success");
+          } else {
+            Swal.fire("Error", "Could not create channels.", "error");
+          }
+        },
+        error: function () {
+          Swal.fire("Request Failed", "Error creating channels from streams.", "error");
+        }
+      });
+    });
+
+    ////////////////////////////////////////////////////////////////////////////
+    // 5) Edit Channel => load channel info + active/available streams
+    ////////////////////////////////////////////////////////////////////////////
+    let editActiveStreamsTable = null;
+    let editAvailableStreamsTable = null;
+
+    $("#editChannelModal").on("show.bs.modal", function (event) {
+      const button = $(event.relatedTarget);
+      const channelID = button.data("channelid");
+
+      // 1) “Active Streams” side => only streams assigned to this channel
+      if (!editActiveStreamsTable) {
+        editActiveStreamsTable = $("#editActiveStreamsTable").DataTable({
+          ajax: {
+            url: `/api/channels/streams/?assigned=${channelID}`,
+            dataSrc: ""
+          },
+          columns: [
+            { data: "name" },
+            {
+              data: "m3u_name",
+              render: (val) => val || ""
+            },
+            {
+              data: "id",
+              render: (id, type, row) => `
+                <button class="btn btn-danger btn-sm editRemoveFromActiveBtn">
+                  <i class="fa-solid fa-minus"></i>
+                </button>
+              `
+            }
+          ],
+          destroy: true,
+          searching: true,
+          paging: true,
+          pageLength: 5,
+          responsive: true
+        });
+      } else {
+        editActiveStreamsTable.clear().draw();
+        editActiveStreamsTable.ajax.url(`/api/channels/streams/?assigned=${channelID}`).load();
+      }
+
+      // 2) “Available Streams” => not assigned
+      if (!editAvailableStreamsTable) {
+        editAvailableStreamsTable = $("#editAvailableStreamsTable").DataTable({
+          ajax: {
+            url: "/api/channels/streams/?unassigned=1",
+            dataSrc: ""
+          },
+          columns: [
+            { data: "name" },
+            {
+              data: "m3u_name",
+              render: (val) => val || ""
+            },
+            {
+              data: "id",
+              render: (id, type, row) => `
+                <button class="btn btn-primary btn-sm editAddToActiveBtn">
+                  <i class="fa-solid fa-plus"></i>
+                </button>
+              `
+            }
+          ],
+          destroy: true,
+          searching: true,
+          paging: true,
+          pageLength: 5,
+          responsive: true
+        });
+      } else {
+        editAvailableStreamsTable.clear().draw();
+        editAvailableStreamsTable.ajax.url("/api/channels/streams/?unassigned=1").load();
+      }
+
+      // 3) Fetch the channel’s details to fill name/number/logo/group
+      $.getJSON(`/api/channels/channels/${channelID}/`, function (channel) {
+        $("#editChannelIdField").val(channelID);
+        $("#editChannelNameField").val(channel.channel_name || "");
+        $("#editChannelNumberField").val(channel.channel_number || 0);
+        $("#editLogoPreview").attr("src", channel.logo_url || "/static/default-logo.png");
+        if (channel.channel_group && channel.channel_group.id) {
+          $("#editGroupField").val(channel.channel_group.id);
+        } else {
+          $("#editGroupField").val("");
+        }
+      }).fail(function () {
+        Swal.fire("Error", "Could not load channel data from server.", "error");
+      });
+    });
+
+    // Move from Available => Active
+    $("#editAvailableStreamsTable").on("click", ".editAddToActiveBtn", function () {
+      const rowData = editAvailableStreamsTable.row($(this).closest("tr")).data();
+      editAvailableStreamsTable.row($(this).closest("tr")).remove().draw();
+      editActiveStreamsTable.row.add(rowData).draw();
+    });
+    // Move from Active => Available
+    $("#editActiveStreamsTable").on("click", ".editRemoveFromActiveBtn", function () {
+      const rowData = editActiveStreamsTable.row($(this).closest("tr")).data();
+      editActiveStreamsTable.row($(this).closest("tr")).remove().draw();
+      editAvailableStreamsTable.row.add(rowData).draw();
+    });
+
+    $("#editChannelForm").submit(function (e) {
+      e.preventDefault();
+      const channelID = $("#editChannelIdField").val();
+      const formData = new FormData(this);
+
+      // gather active streams
+      const activeRows = editActiveStreamsTable.rows().data().toArray();
+      activeRows.forEach((s) => {
+        formData.append("streams[]", s.id);
+      });
+
+      $.ajax({
+        url: `/api/channels/channels/${channelID}/`,
+        type: "PUT",  // or PATCH if your API requires
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function (resp, status, xhr) {
+          if (xhr.status === 200) {
+            Swal.fire("Channel Updated", "Channel saved successfully.", "success");
+            const modalEl = document.getElementById("editChannelModal");
+            bootstrap.Modal.getInstance(modalEl).hide();
+            channelsDataTable.ajax.reload(null, false);
+          } else {
+            Swal.fire("Error", "Could not update channel.", "error");
+          }
+        },
+        error: function () {
+          Swal.fire("Server Error", "Error updating channel.", "error");
+        }
+      });
+    });
+
+    ////////////////////////////////////////////////////////////////////////////
+    // 6) Delete Channel / Stream modals
+    ////////////////////////////////////////////////////////////////////////////
+    $("#deleteChannelModal").on("show.bs.modal", function (event) {
+      const button = $(event.relatedTarget);
+      const channelID = button.data("channelid");
+      const channelName = button.data("channelname");
+      $("#deleteChannelIdHidden").val(channelID);
+      $("#channelName").text(channelName);
+    });
+    $("#deleteChannelForm").submit(function (e) {
+      e.preventDefault();
+      const channelID = $("#deleteChannelIdHidden").val();
+      $.ajax({
+        url: `/api/channels/channels/${channelID}/`,
+        type: "DELETE",
+        success: function (data, status, xhr) {
+          if (xhr.status === 204) {
+            channelsDataTable.ajax.reload(null, false);
+            Swal.fire("Channel Deleted", "The channel was deleted.", "success");
+            const modalEl = document.getElementById("deleteChannelModal");
+            bootstrap.Modal.getInstance(modalEl).hide();
+          } else {
+            Swal.fire("Error", "Server did not return 204.", "error");
+          }
+        },
+        error: function () {
+          Swal.fire("Server Error", "Error deleting channel.", "error");
+        }
+      });
+    });
+
+    $("#deleteStreamModal").on("show.bs.modal", function (event) {
+      const button = $(event.relatedTarget);
+      const streamID = button.data("stream-id");
+      const streamName = button.data("stream-name");
+      $("#deleteStreamIdHidden").val(streamID);
+      $("#streamName").text(streamName);
+    });
+    $("#deleteStreamForm").submit(function (e) {
+      e.preventDefault();
+      const streamID = $("#deleteStreamIdHidden").val();
+      $.ajax({
+        url: `/api/channels/streams/${streamID}/`,
+        type: "DELETE",
+        success: function (data, status, xhr) {
+          if (xhr.status === 204) {
+            streamsDataTable.ajax.reload(null, false);
+            Swal.fire("Stream Deleted", "The stream was deleted.", "success");
+            const modalEl = document.getElementById("deleteStreamModal");
+            bootstrap.Modal.getInstance(modalEl).hide();
+          } else {
+            Swal.fire("Error", "Server did not return 204.", "error");
+          }
+        },
+        error: function () {
+          Swal.fire("Server Error", "Error deleting stream.", "error");
+        }
+      });
+    });
+
+    ////////////////////////////////////////////////////////////////////////////
+    // 7) Add Group
+    ////////////////////////////////////////////////////////////////////////////
+    $("#addGroupForm").submit(function (e) {
+      e.preventDefault();
+      const groupName = $("#newGroupNameField").val();
+      $.ajax({
+        url: "/api/channels/groups/",
+        type: "POST",
+        data: JSON.stringify({ name: groupName }),
+        contentType: "application/json",
+        success: function (createdGroup, status, xhr) {
+          if (xhr.status === 201) {
+            // Optionally add it to group dropdowns
+            $("#newGroupField").append(new Option(createdGroup.name, createdGroup.id));
+            $("#editGroupField").append(new Option(createdGroup.name, createdGroup.id));
+            $("#newGroupNameField").val("");
+            const modalEl = document.getElementById("addGroupModal");
+            bootstrap.Modal.getInstance(modalEl).hide();
+            Swal.fire("Group Added", `New group "${createdGroup.name}" created.`, "success");
+          } else {
+            Swal.fire("Error", "Server did not return 201.", "error");
+          }
+        },
+        error: function () {
+          Swal.fire("Server Error", "Error adding group.", "error");
+        }
+      });
+    });
+
+    ////////////////////////////////////////////////////////////////////////////
+    // 8) Edit Logo
+    ////////////////////////////////////////////////////////////////////////////
+    $("#editLogoModal").on("show.bs.modal", function (event) {
+      const button = $(event.relatedTarget);
+      const channelID = button.data("channelid");
+      const channelName = button.data("channelname");
+      const logoURL = button.data("logourl");
+
+      $("#channel_id_field").val(channelID);
+      $("#logo_url").val(logoURL || "");
+      $("#editLogoModalLabel").text(`Edit Logo for ${channelName}`);
+    });
+    $("#editLogoForm").submit(function (e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+      const channelID = $("#channel_id_field").val();
+      $.ajax({
+        url: `/api/channels/channels/${channelID}/logo`,
+        type: "POST",
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function (resp, status, xhr) {
+          if (xhr.status === 200) {
+            channelsDataTable.ajax.reload(null, false);
+            Swal.fire("Logo Updated", "Channel logo updated successfully.", "success");
+            const modalEl = document.getElementById("editLogoModal");
+            bootstrap.Modal.getInstance(modalEl).hide();
+          } else {
+            Swal.fire("Error", "Server didn't return success for updating logo.", "error");
+          }
+        },
+        error: function () {
+          Swal.fire("Server Error", "Error updating channel logo.", "error");
+        }
+      });
+    });
+
+    ////////////////////////////////////////////////////////////////////////////
+    // 9) M3U Refresh, Backup, Restore
+    ////////////////////////////////////////////////////////////////////////////
+    $("#refreshForm").submit(function (e) {
+      e.preventDefault();
+      $.ajax({
+        url: "/api/m3u/refresh/",
+        type: "POST",
+        success: function (data, status, xhr) {
+          if (xhr.status === 202) {
+            Swal.fire("Refresh Started", "M3U refresh has been initiated.", "success");
+            const modalEl = document.getElementById("refreshModal");
+            bootstrap.Modal.getInstance(modalEl).hide();
+          } else {
+            Swal.fire("Error", "Server did not return 202.", "error");
+          }
+        },
+        error: function () {
+          Swal.fire("Error", "Failed to refresh M3U.", "error");
+        }
+      });
+    });
+    $("#backupForm").submit(function (e) {
+      e.preventDefault();
+      $.post("/api/channels/backup/", {}, function (resp) {
+        Swal.fire("Backup Created", "Backup has been created successfully.", "success");
+        const modalEl = document.getElementById("backupModal");
+        bootstrap.Modal.getInstance(modalEl).hide();
+      }).fail(function () {
+        Swal.fire("Server Error", "Error creating backup.", "error");
+      });
+    });
+    $("#restoreForm").submit(function (e) {
+      e.preventDefault();
+      $.post("/api/channels/restore/", {}, function (resp) {
+        Swal.fire("Restored", "Restore complete.", "success");
+        const modalEl = document.getElementById("restoreModal");
+        bootstrap.Modal.getInstance(modalEl).hide();
+        channelsDataTable.ajax.reload();
+        streamsDataTable.ajax.reload();
+        // If you have an M3U table, reload it as well.
+      }).fail(function () {
+        Swal.fire("Server Error", "Error restoring backup.", "error");
+      });
+    });
+
+});
+</script>
+{% endblock %}

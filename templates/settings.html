@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}M3U Management - Dispatcharr{% endblock %}
+{% block page_header %}M3U Management{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}">Home</a></li>
+<li class="breadcrumb-item active" aria-current="page">M3U Management</li>
+{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">M3U Accounts</h3>
+    <button id="addM3UBtn" class="btn btn-primary float-end">
+      <i class="bi bi-plus"></i> Add M3U Account
+    </button>
+  </div>
+  <div class="card-body">
+    <table id="m3uTable" class="table table-striped">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Server URL</th>
+          <th>Uploaded File</th>
+          <th>Active</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- M3U Modal -->
+<div class="modal fade" id="m3uModal" tabindex="-1" aria-labelledby="m3uModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="m3uForm" enctype="multipart/form-data">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="m3uModalLabel">M3U Account</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="m3uId" name="id">
+          <div class="mb-3">
+            <label for="m3uName" class="form-label">Name</label>
+            <input type="text" class="form-control" id="m3uName" name="name" required>
+          </div>
+          <div class="mb-3">
+            <label for="serverUrl" class="form-label">Server URL</label>
+            <input type="url" class="form-control" id="serverUrl" name="server_url">
+          </div>
+          <div class="mb-3">
+            <label for="uploadedFile" class="form-label">Uploaded File</label>
+            <input type="file" class="form-control" id="uploadedFile" name="uploaded_file">
+          </div>
+          <div class="mb-3">
+            <label for="isActive" class="form-label">Active</label>
+            <select class="form-select" id="isActive" name="is_active">
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Save Account</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  var m3uTable = new DataTable("#m3uTable", {
+    ajax: "{% url 'api:m3u-account-list' %}",
+    columns: [
+      { data: "id" },
+      { data: "name" },
+      { data: "server_url" },
+      { data: "uploaded_file" },
+      { data: "is_active", render: function(data){ return data ? "Yes" : "No"; } },
+      { data: null, render: function(data){
+          return '<button class="btn btn-sm btn-primary edit-m3u" data-id="'+data.id+'">Edit</button> ' +
+                 '<button class="btn btn-sm btn-danger delete-m3u" data-id="'+data.id+'">Delete</button>';
+        }
+      }
+    ]
+  });
+  
+  document.getElementById("addM3UBtn").addEventListener("click", function(){
+    document.getElementById("m3uForm").reset();
+    document.getElementById("m3uId").value = '';
+    document.getElementById("m3uModalLabel").textContent = "Add M3U Account";
+    new bootstrap.Modal(document.getElementById("m3uModal")).show();
+  });
+  
+  document.querySelector("#m3uTable").addEventListener("click", function(e){
+    if(e.target.classList.contains("edit-m3u")){
+      var m3uId = e.target.getAttribute("data-id");
+      fetch("/api/m3u/accounts/" + m3uId + "/")
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById("m3uId").value = data.id;
+          document.getElementById("m3uName").value = data.name;
+          document.getElementById("serverUrl").value = data.server_url;
+          document.getElementById("isActive").value = data.is_active ? "true" : "false";
+          document.getElementById("m3uModalLabel").textContent = "Edit M3U Account";
+          new bootstrap.Modal(document.getElementById("m3uModal")).show();
+        });
+    }
+    if(e.target.classList.contains("delete-m3u")){
+      var m3uId = e.target.getAttribute("data-id");
+      Swal.fire({
+        title: 'Are you sure?',
+        text: "This will delete the M3U Account permanently.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, delete it!'
+      }).then(result => {
+        if(result.isConfirmed){
+          fetch("/api/m3u/accounts/" + m3uId + "/", { method: "DELETE" })
+            .then(response => {
+              if(response.ok){
+                Swal.fire("Deleted!", "M3U Account deleted.", "success");
+                m3uTable.ajax.reload();
+              } else {
+                Swal.fire("Error", "Failed to delete M3U Account.", "error");
+              }
+            });
+        }
+      });
+    }
+  });
+  
+  document.getElementById("m3uForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    var m3uId = document.getElementById("m3uId").value;
+    var formData = new FormData(this);
+    var method = m3uId ? "PUT" : "POST";
+    var url = m3uId ? "/api/m3u/accounts/" + m3uId + "/" : "/api/m3u/accounts/";
+    fetch(url, {
+      method: method,
+      body: formData
+    }).then(response => {
+      if(response.ok){
+        bootstrap.Modal.getInstance(document.getElementById("m3uModal")).hide();
+        Swal.fire("Success", "M3U Account saved!", "success");
+        m3uTable.ajax.reload();
+      } else {
+        Swal.fire("Error", "Failed to save M3U Account.", "error");
+      }
+    });
+  });
+});
+</script>
+{% endblock %}

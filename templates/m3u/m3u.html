@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}M3U Management - Dispatcharr{% endblock %}
+{% block page_header %}M3U Management{% endblock %}
+{% block content %}
+
+<div class="container">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title">M3U Accounts</h3>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addM3UModal">Add M3U</button>
+        </div>
+        <div class="card-body">
+            <table id="m3uTable" class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>URL/File</th>
+                        <th>Max Streams</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m3u in m3u_accounts %}
+                    <tr>
+                        <td>{{ m3u.name }}</td>
+                        <td>
+                            {% if m3u.server_url %}
+                                <a href="{{ m3u.server_url }}" target="_blank">M3U URL</a>
+                            {% elif m3u.uploaded_file and m3u.uploaded_file.url %}
+                                <a href="{{ m3u.uploaded_file.url }}" download>Download File</a>
+                            {% else %}
+                                No URL or file
+                            {% endif %}
+                        </td>
+                        <td>{{ m3u.max_streams|default:"N/A" }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-warning" onclick="editM3U({{ m3u.id }})">Edit</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteM3U({{ m3u.id }})">Delete</button>
+                            <button class="btn btn-sm btn-info" onclick="refreshM3U({{ m3u.id }})">Refresh</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add M3U Modal -->
+<div class="modal fade" id="addM3UModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add M3U Account</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="m3uForm">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-control" id="m3uName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">M3U URL</label>
+                        <input type="url" class="form-control" id="m3uURL">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Upload File</label>
+                        <input type="file" class="form-control" id="m3uFile">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Max Streams</label>
+                        <input type="number" class="form-control" id="m3uMaxStreams" value="0">
+                    </div>
+                    <button type="submit" class="btn btn-success">Save</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    $(document).ready(function () {
+        $('#m3uTable').DataTable();
+    });
+
+    function deleteM3U(id) {
+        Swal.fire({
+            title: "Are you sure?",
+            text: "You won't be able to revert this!",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonColor: "#d33",
+            confirmButtonText: "Yes, delete it!"
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: `/m3u/${id}/delete/`,
+                    method: "POST",
+                    success: function () {
+                        Swal.fire("Deleted!", "The M3U account has been deleted.", "success")
+                            .then(() => location.reload());
+                    },
+                    error: function () {
+                        Swal.fire("Error", "Failed to delete the M3U account.", "error");
+                    }
+                });
+            }
+        });
+    }
+
+    function refreshM3U(id) {
+        $.ajax({
+            url: `/m3u/${id}/refresh/`,
+            method: "POST",
+            success: function () {
+                Swal.fire("Refreshed!", "The M3U has been refreshed.", "success")
+                    .then(() => location.reload());
+            },
+            error: function () {
+                Swal.fire("Error", "Failed to refresh the M3U.", "error");
+            }
+        });
+    }
+</script>
+{% endblock %}
