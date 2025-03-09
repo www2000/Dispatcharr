@@ -14,10 +14,11 @@ from collections import deque
 import time
 from typing import Optional, Set, Deque, Dict
 from apps.proxy.config import TSConfig as Config
+import redis
 
 class StreamManager:
     """Manages TS stream state and connection handling"""
-    
+
     def __init__(self, initial_url: str, channel_id: str, user_agent: Optional[str] = None):
         self.current_url: str = initial_url
         self.channel_id: str = channel_id
@@ -59,16 +60,38 @@ class StreamManager:
             self.session.close()
 
 class StreamBuffer:
-    """Manages stream data buffering"""
-    
-    def __init__(self):
-        self.buffer: Deque[bytes] = deque(maxlen=Config.BUFFER_SIZE)
-        self.lock: threading.Lock = threading.Lock()
-        self.index: int = 0
+    """Manages stream data buffering with Redis"""
+
+    def __init__(self, channel_id: str):
+        self.channel_id = channel_id
+        self.redis = redis.StrictRedis(host='localhost', port=6379, db=0)
+        self.buffer_key = f"stream_buffer:{channel_id}"
+        self.index_key = f"stream_buffer_index:{channel_id}"
+
+    def append_data(self, data: bytes) -> None:
+        """Append data to the Redis buffer"""
+        # Append the data to the Redis list (simulating a deque behavior)
+        self.redis.rpush(self.buffer_key, data)
+
+        # Increment and update the index after adding the data
+        current_index = self.get_index()  # Get current index
+        self.set_index(current_index + 1)  # Increment and store the new index
+
+    def get_buffer(self) -> list:
+        """Retrieve the current buffer from Redis"""
+        return self.redis.lrange(self.buffer_key, 0, -1)
+
+    def get_index(self) -> int:
+        """Retrieve the current buffer index"""
+        return int(self.redis.get(self.index_key) or 0)
+
+    def set_index(self, index: int) -> None:
+        """Set the buffer index in Redis"""
+        self.redis.set(self.index_key, index)
 
 class ClientManager:
     """Manages active client connections"""
-    
+
     def __init__(self):
         self.active_clients: Set[int] = set()
         self.lock: threading.Lock = threading.Lock()
@@ -76,7 +99,7 @@ class ClientManager:
         self.cleanup_timer: Optional[threading.Timer] = None
         self._proxy_server = None
         self._channel_id = None
-        
+
     def start_cleanup_timer(self, proxy_server, channel_id):
         """Start timer to cleanup idle channels"""
         self._proxy_server = proxy_server
@@ -84,13 +107,13 @@ class ClientManager:
         if self.cleanup_timer:
             self.cleanup_timer.cancel()
         self.cleanup_timer = threading.Timer(
-            Config.CLIENT_TIMEOUT, 
+            Config.CLIENT_TIMEOUT,
             self._cleanup_idle_channel,
             args=[proxy_server, channel_id]
         )
         self.cleanup_timer.daemon = True
         self.cleanup_timer.start()
-        
+
     def _cleanup_idle_channel(self, proxy_server, channel_id):
         """Stop channel if no clients connected"""
         with self.lock:
@@ -118,7 +141,7 @@ class ClientManager:
 
 class StreamFetcher:
     """Handles stream data fetching"""
-    
+
     def __init__(self, manager: StreamManager, buffer: StreamBuffer):
         self.manager = manager
         self.buffer = buffer
@@ -144,10 +167,10 @@ class StreamFetcher:
             if not self.manager.should_retry():
                 logging.error(f"Failed to connect after {Config.MAX_RETRIES} attempts")
                 return False
-            
+
             if not self.manager.running:
                 return False
-                
+
             self.manager.retry_count += 1
             logging.info(f"Connecting to stream: {self.manager.current_url} "
                         f"(attempt {self.manager.retry_count}/{Config.MAX_RETRIES})")
@@ -166,25 +189,25 @@ class StreamFetcher:
             if not self.manager.running:
                 logging.info("Stream fetch stopped - shutting down")
                 return
-                
+
             if chunk:
                 if self.manager.url_changed.is_set():
                     logging.info("Stream switch in progress, closing connection")
                     self.manager.url_changed.clear()
                     break
-                    
-                with self.buffer.lock:
-                    self.buffer.buffer.append(chunk)
-                    self.buffer.index += 1
+
+                self.buffer.append_data(chunk)
+                current_index = self.buffer.get_index()  # Get current index from Redis
+                self.buffer.set_index(current_index + 1)
 
     def _handle_connection_error(self, error: Exception) -> None:
         """Handle stream connection errors"""
         logging.error(f"Stream connection error: {error}")
         self.manager.connected = False
-        
+
         if not self.manager.running:
             return
-            
+
         logging.info(f"Attempting to reconnect in {Config.RECONNECT_DELAY} seconds...")
         if not wait_for_running(self.manager, Config.RECONNECT_DELAY):
             return
@@ -200,7 +223,7 @@ def wait_for_running(manager: StreamManager, delay: float) -> bool:
 
 class ProxyServer:
     """Manages TS proxy server instance"""
-    
+
     def __init__(self, user_agent: Optional[str] = None):
         self.stream_managers: Dict[str, StreamManager] = {}
         self.stream_buffers: Dict[str, StreamBuffer] = {}
@@ -212,23 +235,23 @@ class ProxyServer:
         """Initialize a new channel stream"""
         if channel_id in self.stream_managers:
             self.stop_channel(channel_id)
-            
+
         self.stream_managers[channel_id] = StreamManager(
-            url, 
+            url,
             channel_id,
             user_agent=self.user_agent
         )
-        self.stream_buffers[channel_id] = StreamBuffer()
+        self.stream_buffers[channel_id] = StreamBuffer(channel_id)
         self.client_managers[channel_id] = ClientManager()
-        
+
         # Start cleanup timer immediately after initialization
         self.client_managers[channel_id].start_cleanup_timer(self, channel_id)
-        
+
         fetcher = StreamFetcher(
-            self.stream_managers[channel_id], 
+            self.stream_managers[channel_id],
             self.stream_buffers[channel_id]
         )
-        
+
         self.fetch_threads[channel_id] = threading.Thread(
             target=fetcher.fetch_loop,
             name=f"StreamFetcher-{channel_id}",
@@ -251,10 +274,10 @@ class ProxyServer:
                 logging.error(f"Error stopping channel {channel_id}: {e}")
             finally:
                 self._cleanup_channel(channel_id)
-            
+
     def _cleanup_channel(self, channel_id: str) -> None:
         """Remove channel resources"""
-        for collection in [self.stream_managers, self.stream_buffers, 
+        for collection in [self.stream_managers, self.stream_buffers,
                          self.client_managers, self.fetch_threads]:
             collection.pop(channel_id, None)
 

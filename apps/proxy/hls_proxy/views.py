@@ -15,7 +15,7 @@ def stream_endpoint(request, channel_id):
     """Handle HLS manifest requests"""
     if channel_id not in proxy_server.stream_managers:
         return JsonResponse({'error': 'Channel not found'}, status=404)
-    
+
     response = proxy_server.stream_endpoint(channel_id)
     return StreamingHttpResponse(
         response[0],
@@ -30,10 +30,10 @@ def get_segment(request, segment_name):
     try:
         segment_num = int(segment_name.split('.')[0])
         buffer = proxy_server.stream_buffers.get(segment_num)
-        
+
         if not buffer:
             return JsonResponse({'error': 'Segment not found'}, status=404)
-            
+
         return StreamingHttpResponse(
             buffer,
             content_type='video/MP2T'
@@ -51,12 +51,12 @@ def change_stream(request, channel_id):
     try:
         if channel_id not in proxy_server.stream_managers:
             return JsonResponse({'error': 'Channel not found'}, status=404)
-            
+
         data = json.loads(request.body)
         new_url = data.get('url')
         if not new_url:
             return JsonResponse({'error': 'No URL provided'}, status=400)
-            
+
         manager = proxy_server.stream_managers[channel_id]
         if manager.update_url(new_url):
             return JsonResponse({
@@ -64,7 +64,7 @@ def change_stream(request, channel_id):
                 'channel': channel_id,
                 'url': new_url
             })
-            
+
         return JsonResponse({
             'message': 'URL unchanged',
             'channel': channel_id,
@@ -85,7 +85,7 @@ def initialize_stream(request, channel_id):
         url = data.get('url')
         if not url:
             return JsonResponse({'error': 'No URL provided'}, status=400)
-            
+
         proxy_server.initialize_channel(url, channel_id)
         return JsonResponse({
             'message': 'Stream initialized',

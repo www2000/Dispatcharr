@@ -20,10 +20,10 @@ def initialize_stream(request, channel_id):
         url = data.get('url')
         if not url:
             return JsonResponse({'error': 'No URL provided'}, status=400)
-        
+
         # Start the channel
         proxy_server.initialize_channel(url, channel_id)
-        
+
         # Wait for connection to be established
         manager = proxy_server.stream_managers[channel_id]
         wait_start = time.time()
@@ -39,7 +39,7 @@ def initialize_stream(request, channel_id):
                     'error': 'Failed to connect'
                 }, status=502)
             time.sleep(0.1)
-            
+
         return JsonResponse({
             'message': 'Stream initialized and connected',
             'channel': channel_id,
@@ -57,28 +57,28 @@ def stream_ts(request, channel_id):
     """Handle TS stream requests"""
     if channel_id not in proxy_server.stream_managers:
         return JsonResponse({'error': 'Channel not found'}, status=404)
-        
+
     def generate():
         client_id = threading.get_ident()
         try:
+            # Use the Redis buffer
             buffer = proxy_server.stream_buffers[channel_id]
             client_manager = proxy_server.client_managers[channel_id]
-            
+
             client_manager.add_client(client_id)
-            last_index = buffer.index
-            
+            last_index = buffer.get_index()
+
             while True:
-                with buffer.lock:
-                    if buffer.index > last_index:
-                        chunks_behind = buffer.index - last_index
-                        start_pos = max(0, len(buffer.buffer) - chunks_behind)
-                        
-                        for i in range(start_pos, len(buffer.buffer)):
-                            yield buffer.buffer[i]
-                        last_index = buffer.index
-                
+                if buffer.get_index() > last_index:
+                    chunks_behind = buffer.get_index() - last_index
+                    start_pos = max(0, len(buffer.get_buffer()) - chunks_behind)
+
+                    for i in range(start_pos, len(buffer.get_buffer())):
+                        yield buffer.get_buffer()[i]
+                    last_index = buffer.get_index()
+
                 threading.Event().wait(0.1)  # Short sleep between checks
-                
+
         except Exception as e:
             logger.error(f"Streaming error for channel {channel_id}: {e}")
         finally:
@@ -103,12 +103,12 @@ def change_stream(request, channel_id):
     try:
         if channel_id not in proxy_server.stream_managers:
             return JsonResponse({'error': 'Channel not found'}, status=404)
-            
+
         data = json.loads(request.body)
         new_url = data.get('url')
         if not new_url:
             return JsonResponse({'error': 'No URL provided'}, status=400)
-            
+
         manager = proxy_server.stream_managers[channel_id]
         if manager.update_url(new_url):
             return JsonResponse({
@@ -116,7 +116,7 @@ def change_stream(request, channel_id):
                 'channel': channel_id,
                 'url': new_url
             })
-            
+
         return JsonResponse({
             'message': 'URL unchanged',
             'channel': channel_id,
