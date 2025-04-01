@@ -8,6 +8,8 @@ services:
       - db
       - redis
     environment:
+      - PUID=$PUID
+      - PGID=$PGID
       - POSTGRES_HOST=db
       - POSTGRES_DB=dispatcharr
       - POSTGRES_USER=dispatch
