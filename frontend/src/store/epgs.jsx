@@ -29,6 +29,19 @@ const useEPGsStore = create((set) => ({
     set({ isLoading: true, error: null });
     try {
       const tvgs = await api.getEPGData();
+
+      // Check if tvgs is actually an array
+      if (!Array.isArray(tvgs)) {
+        console.error('Expected TVGs to be an array but got:', typeof tvgs, tvgs);
+        set({
+          tvgs: [],
+          tvgsById: {},
+          isLoading: false,
+          error: 'Invalid EPG data format received from server'
+        });
+        return;
+      }
+
       set({
         tvgs: tvgs,
         tvgsById: tvgs.reduce((acc, tvg) => {
@@ -39,7 +52,12 @@ const useEPGsStore = create((set) => ({
       });
     } catch (error) {
       console.error('Failed to fetch tvgs:', error);
-      set({ error: 'Failed to load tvgs.', isLoading: false });
+      set({
+        tvgs: [],
+        tvgsById: {},
+        isLoading: false,
+        error: 'Failed to load EPG data.'
+      });
     }
   },
 

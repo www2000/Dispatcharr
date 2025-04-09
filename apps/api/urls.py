@@ -26,12 +26,11 @@ urlpatterns = [
     path('hdhr/', include(('apps.hdhr.api_urls', 'hdhr'), namespace='hdhr')),
     path('m3u/', include(('apps.m3u.api_urls', 'm3u'), namespace='m3u')),
     path('core/', include(('core.api_urls', 'core'), namespace='core')),
+    path('downloads/', include(('apps.downloads.api_urls', 'downloads'), namespace='downloads')),
     # path('output/', include(('apps.output.api_urls', 'output'), namespace='output')),
     #path('player/', include(('apps.player.api_urls', 'player'), namespace='player')),
     #path('settings/', include(('apps.settings.api_urls', 'settings'), namespace='settings')),
     #path('streams/', include(('apps.streams.api_urls', 'streams'), namespace='streams')),
-
-
 
     # Swagger Documentation api_urls
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),

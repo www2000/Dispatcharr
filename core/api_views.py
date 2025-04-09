@@ -11,6 +11,9 @@ from drf_yasg.utils import swagger_auto_schema
 import socket
 import requests
 import os
+from django.middleware.csrf import get_token
+from django.http import JsonResponse
+from rest_framework.permissions import AllowAny
 
 class UserAgentViewSet(viewsets.ModelViewSet):
     """
@@ -84,3 +87,13 @@ def environment(request):
         'country_name': country_name,
         'env_mode': "dev" if os.getenv('DISPATCHARR_ENV') == "dev" else "prod",
     })
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_csrf_token(request):
+    """
+    Returns a CSRF token for clients to use in their requests.
+    This endpoint does not require authentication.
+    """
+    csrf_token = get_token(request)
+    return JsonResponse({'csrf_token': csrf_token})

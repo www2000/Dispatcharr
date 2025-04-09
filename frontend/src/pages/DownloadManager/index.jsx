@@ -159,15 +159,32 @@ export default function DownloadManager() {
         e.preventDefault();
 
         try {
+            // Log the form values for debugging
+            console.log("Form submission values:", formValues);
+
+            // Ensure numeric values are actually numbers, not strings
+            const formattedValues = {
+                ...formValues,
+                hour: Number(formValues.hour),
+                minute: Number(formValues.minute),
+                day_of_week: formValues.day_of_week !== null ? Number(formValues.day_of_week) : null,
+                day_of_month: formValues.day_of_month !== null ? Number(formValues.day_of_month) : null,
+                // Make sure other fields are properly formatted
+                is_active: Boolean(formValues.is_active),
+                custom_headers: formValues.custom_headers || {},
+            };
+
+            console.log("Formatted values:", formattedValues);
+
             if (currentTask) {
-                await API.updateDownloadTask(currentTask.id, formValues);
+                await API.updateDownloadTask(currentTask.id, formattedValues);
                 notifications.show({
                     title: 'Success',
                     message: 'Download task updated successfully',
                     color: 'green',
                 });
             } else {
-                await API.createDownloadTask(formValues);
+                await API.createDownloadTask(formattedValues);
                 notifications.show({
                     title: 'Success',
                     message: 'Download task created successfully',
@@ -179,10 +196,15 @@ export default function DownloadManager() {
             fetchTasks();
         } catch (error) {
             console.error('Error saving download task:', error);
+
+            // Create a more user-friendly error message
+            const errorMessage = error.message || 'Unknown error occurred';
+
             notifications.show({
                 title: 'Error',
-                message: 'Failed to save download task',
+                message: errorMessage,
                 color: 'red',
+                autoClose: false,
             });
         }
     };
@@ -266,6 +288,24 @@ export default function DownloadManager() {
                 message: 'Failed to delete download task',
                 color: 'red',
             });
+        }
+    };
+
+    // Debug function to check logs (you can add a debug button for this)
+    const checkServerLogs = async () => {
+        try {
+            const response = await fetch(`${API.host}/api/debug/logs/`, {
+                headers: {
+                    Authorization: `Bearer ${await API.getAuthToken()}`,
+                },
+            });
+
+            const logs = await response.text();
+            console.log("Server logs:", logs);
+
+            // You could display these in a modal if needed
+        } catch (error) {
+            console.error("Failed to fetch logs:", error);
         }
     };
 
@@ -508,7 +548,6 @@ export default function DownloadManager() {
                             onChange={(e) => setFormValues({ ...formValues, name: e.target.value })}
                             required
                         />
-
                         <TextInput
                             label="URL"
                             placeholder="Enter the download URL"
@@ -516,7 +555,6 @@ export default function DownloadManager() {
                             onChange={(e) => setFormValues({ ...formValues, url: e.target.value })}
                             required
                         />
-
                         <Select
                             label="Download Type"
                             value={formValues.download_type}
@@ -528,7 +566,6 @@ export default function DownloadManager() {
                             ]}
                             required
                         />
-
                         <Select
                             label="Frequency"
                             value={formValues.frequency}
@@ -541,29 +578,24 @@ export default function DownloadManager() {
                             ]}
                             required
                         />
-
                         {renderFrequencyOptions()}
-
                         <TextInput
                             label="Custom Filename (Optional)"
                             placeholder="Leave blank to use original filename"
                             value={formValues.custom_filename}
                             onChange={(e) => setFormValues({ ...formValues, custom_filename: e.target.value })}
                         />
-
                         <TextInput
                             label="User Agent (Optional)"
                             placeholder="Custom user agent string"
                             value={formValues.user_agent}
                             onChange={(e) => setFormValues({ ...formValues, user_agent: e.target.value })}
                         />
-
                         <Switch
                             label="Active"
                             checked={formValues.is_active}
                             onChange={(e) => setFormValues({ ...formValues, is_active: e.currentTarget.checked })}
                         />
-
                         <Group position="right">
                             <Button variant="default" onClick={closeModal}>Cancel</Button>
                             <Button type="submit">{currentTask ? 'Update' : 'Create'}</Button>

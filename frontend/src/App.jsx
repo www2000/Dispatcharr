@@ -32,6 +32,7 @@ import { Notifications } from '@mantine/notifications';
 import M3URefreshNotification from './components/M3URefreshNotification';
 import 'allotment/dist/style.css';
 import DownloadManager from './pages/DownloadManager';
+import { setupCSRF } from './utils/csrf';
 
 const drawerWidth = 240;
 const miniDrawerWidth = 60;
@@ -69,6 +70,26 @@ const App = () => {
 
   // Authentication check
   useEffect(() => {
+    const checkAuth = async () => {
+      const loggedIn = await initializeAuth();
+      if (loggedIn) {
+        await initData();
+        setIsAuthenticated(true);
+      } else {
+        await logout();
+      }
+    };
+    checkAuth();
+  }, [initializeAuth, initData, setIsAuthenticated, logout]);
+
+  useEffect(() => {
+    // Initialize CSRF protection
+    setupCSRF();
+
+    // Fetch CSRF token on app initialization
+    API.getCsrfToken();
+
+    // Existing code for checking authentication
     const checkAuth = async () => {
       const loggedIn = await initializeAuth();
       if (loggedIn) {

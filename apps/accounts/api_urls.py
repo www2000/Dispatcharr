@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .api_views import (
     AuthViewSet, UserViewSet, GroupViewSet,
-    list_permissions, initialize_superuser
+    list_permissions, initialize_superuser, get_csrf_token
 )
 from rest_framework_simplejwt import views as jwt_views
 
@@ -27,6 +27,7 @@ urlpatterns = [
     # Authentication
     path('auth/login/', auth_view, name='user-login'),
     path('auth/logout/', logout_view, name='user-logout'),
+    path('csrf/', get_csrf_token, name='csrf-token'),
 
     # Superuser API
     path('initialize-superuser/', initialize_superuser, name='initialize_superuser'),

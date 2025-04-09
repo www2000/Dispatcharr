@@ -629,19 +629,40 @@ export default class API {
   }
 
   static async getEPGData() {
-    const response = await fetch(`${host}/api/epg/epgdata/`, {
-      headers: {
-        Authorization: `Bearer ${await API.getAuthToken()}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    try {
+      const response = await fetch(`${host}/api/epg/data/`, {
+        headers: {
+          Authorization: `Bearer ${await API.getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-    const retval = await response.json();
-    return retval;
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch EPG data: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+
+      // Ensure we return an array, even if the API response format is unexpected
+      if (!data) return [];
+
+      // Handle different possible API response formats
+      if (Array.isArray(data)) {
+        return data;
+      } else if (data.data && Array.isArray(data.data)) {
+        return data.data;
+      } else if (data.results && Array.isArray(data.results)) {
+        return data.results;
+      } else {
+        console.error('Unexpected EPG data format:', data);
+        return [];
+      }
+    } catch (error) {
+      console.error("API error in getEPGData:", error);
+      return []; // Return empty array instead of throwing to prevent UI errors
+    }
   }
-
-  // Notice there's a duplicated "refreshPlaylist" method above;
-  // you might want to rename or remove one if it's not needed.
 
   static async addEPG(values) {
     let body = null;
@@ -1144,76 +1165,222 @@ export default class API {
     useChannelsStore.getState().fetchRecordings();
   }
 
-  // Download Manager API methods
-  static async getDownloadTasks() {
-    const response = await fetch(`${host}/api/downloads/tasks/`, {
-      headers: {
-        Authorization: `Bearer ${await API.getAuthToken()}`,
-        'Content-Type': 'application/json',
-      },
-    });
+  // Helper method to get CSRF token - improved version
+  static async getCsrfToken() {
+    try {
+      const name = 'csrftoken';
+      let cookieValue = null;
 
-    return await response.json();
-  }
+      // Try to get from cookies first
+      if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          if (cookie.substring(0, name.length + 1) === (name + '=')) {
+            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
 
-  static async getDownloadTask(id) {
-    const response = await fetch(`${host}/api/downloads/tasks/${id}/`, {
-      headers: {
-        Authorization: `Bearer ${await API.getAuthToken()}`,
-        'Content-Type': 'application/json',
-      },
-    });
+      // If not found in cookies, fetch from dedicated endpoint
+      if (!cookieValue) {
+        const response = await fetch(`${host}/api/core/csrf/`, {
+          credentials: 'include', // Important for CSRF cookies
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch CSRF token: ${response.status}`);
+        }
+        const data = await response.json();
+        cookieValue = data.csrf_token;
+      }
 
-    return await response.json();
+      return cookieValue;
+    } catch (error) {
+      console.warn('Error getting CSRF token:', error);
+      // Return empty string instead of null to avoid undefined headers
+      return '';
+    }
   }
 
   static async createDownloadTask(values) {
-    const response = await fetch(`${host}/api/downloads/tasks/`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${await API.getAuthToken()}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(values),
-    });
+    try {
+      // Log values to console for debugging
+      console.log("Creating download task with values:", values);
 
-    return await response.json();
+      // Get CSRF token first
+      const csrfToken = await this.getCsrfToken();
+
+      const response = await fetch(`${host}/api/downloads/tasks/`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${await API.getAuthToken()}`,
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+        },
+        credentials: 'include', // Important for CSRF cookies
+        body: JSON.stringify(values),
+      });
+
+      // Enhanced error handling with detailed information
+      if (!response.ok) {
+        let errorMessage = `HTTP Error: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          console.error("API error response:", errorData);
+
+          if (errorData.detail) {
+            errorMessage = errorData.detail;
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (typeof errorData === 'object') {
+            // Format field-specific validation errors
+            const fieldErrors = Object.entries(errorData)
+              .filter(([key]) => key !== 'non_field_errors')
+              .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`);
+
+            const nonFieldErrors = errorData.non_field_errors ?
+              errorData.non_field_errors.join(', ') : '';
+
+            if (fieldErrors.length > 0 || nonFieldErrors) {
+              errorMessage = [nonFieldErrors, ...fieldErrors].filter(Boolean).join('; ');
+            }
+          }
+        } catch (e) {
+          // If response is not JSON, get text
+          try {
+            const errorText = await response.text();
+            if (errorText) errorMessage += ` - ${errorText}`;
+          } catch { } // Ignore error reading text
+        }
+        throw new Error(`Failed to create task: ${errorMessage}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("API error in createDownloadTask:", error);
+      throw error;
+    }
+  }
+
+  // Download Manager API methods
+  static async getDownloadTasks() {
+    try {
+      const response = await fetch(`${host}/api/downloads/tasks/`, {
+        headers: {
+          Authorization: `Bearer ${await API.getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch tasks: ${response.status} - ${errorText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("API error in getDownloadTasks:", error);
+      throw error;
+    }
+  }
+
+  static async getDownloadTask(id) {
+    try {
+      const response = await fetch(`${host}/api/downloads/tasks/${id}/`, {
+        headers: {
+          Authorization: `Bearer ${await API.getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch task: ${response.status} - ${errorText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("API error in getDownloadTask:", error);
+      throw error;
+    }
   }
 
   static async updateDownloadTask(id, values) {
-    const response = await fetch(`${host}/api/downloads/tasks/${id}/`, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${await API.getAuthToken()}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(values),
-    });
+    try {
+      const csrfToken = await this.getCsrfToken();
+      const response = await fetch(`${host}/api/downloads/tasks/${id}/`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${await API.getAuthToken()}`,
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+        },
+        credentials: 'include', // This is important for including cookies
+        body: JSON.stringify(values),
+      });
 
-    return await response.json();
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to update task: ${response.status} - ${errorText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("API error in updateDownloadTask:", error);
+      throw error;
+    }
   }
 
   static async deleteDownloadTask(id) {
-    const response = await fetch(`${host}/api/downloads/tasks/${id}/`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${await API.getAuthToken()}`,
-      },
-    });
+    try {
+      const csrfToken = await this.getCsrfToken();
+      const response = await fetch(`${host}/api/downloads/tasks/${id}/`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${await API.getAuthToken()}`,
+          'X-CSRFToken': csrfToken,
+        },
+        credentials: 'include', // This is important for including cookies
+      });
 
-    return response.ok;
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to delete task: ${response.status} - ${errorText}`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error("API error in deleteDownloadTask:", error);
+      throw error;
+    }
   }
 
   static async triggerDownload(id) {
-    const response = await fetch(`${host}/api/downloads/tasks/${id}/trigger/`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${await API.getAuthToken()}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    try {
+      const csrfToken = await this.getCsrfToken();
+      const response = await fetch(`${host}/api/downloads/tasks/${id}/trigger/`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${await API.getAuthToken()}`,
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+        },
+        credentials: 'include', // This is important for including cookies
+      });
 
-    return await response.json();
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to trigger download: ${response.status} - ${errorText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("API error in triggerDownload:", error);
+      throw error;
+    }
   }
 
   static async getDownloadTaskHistory(id) {

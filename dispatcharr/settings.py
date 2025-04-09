@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.channels.apps.ChannelsConfig',
     'apps.dashboard',
+    'apps.downloads',  # Add this line for the downloads app
     'apps.epg',
     'apps.hdhr',
     'apps.m3u',
@@ -52,6 +53,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'core.middleware.CustomCsrfMiddleware',  # Add our custom middleware
 ]
 
 
@@ -189,7 +191,8 @@ CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = [
     'http://*',
-    'https://*'
+    'https://*',
+    'http://10.0.0.10:9192',  # Add your specific origin
 ]
 APPEND_SLASH = True
 

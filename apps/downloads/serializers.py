@@ -1,16 +1,16 @@
 from rest_framework import serializers
 from .models import DownloadTask, DownloadHistory
+import logging
+import re
+
+logger = logging.getLogger(__name__)
 
 class DownloadHistorySerializer(serializers.ModelSerializer):
     duration = serializers.SerializerMethodField()
 
     class Meta:
         model = DownloadHistory
-        fields = [
-            'id', 'started_at', 'completed_at', 'status',
-            'file_size', 'download_speed', 'error_message',
-            'saved_path', 'duration'
-        ]
+        fields = '__all__'
 
     def get_duration(self, obj):
         return obj.duration()
@@ -20,13 +20,10 @@ class DownloadTaskSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DownloadTask
-        fields = [
-            'id', 'name', 'url', 'download_type', 'frequency',
-            'cron_expression', 'hour', 'minute', 'day_of_week',
-            'day_of_month', 'status', 'last_run', 'next_run',
-            'last_success', 'last_failure', 'custom_filename',
-            'is_active', 'created_at', 'updated_at', 'user_agent',
-            'custom_headers', 'latest_history'
+        fields = '__all__'
+        read_only_fields = [
+            'status', 'last_run', 'next_run',
+            'last_success', 'last_failure', 'created_at', 'updated_at'
         ]
 
     def get_latest_history(self, obj):
@@ -34,3 +31,34 @@ class DownloadTaskSerializer(serializers.ModelSerializer):
         if latest:
             return DownloadHistorySerializer(latest).data
         return None
+
+    def validate_url(self, value):
+        """Custom URL validator that's more permissive than Django's URLValidator"""
+        logger.debug(f"Validating URL: {value}")
+
+        # Basic URL format checking - this is more permissive than Django's validator
+        # Allow URLs with protocols like http://, https://, ftp://, etc.
+        if not re.match(r'^[a-z0-9+.-]+://.*', value, re.IGNORECASE):
+            # If no protocol specified, try prepending http://
+            if not value.startswith('http://') and not value.startswith('https://'):
+                value = 'http://' + value
+                logger.debug(f"Added http:// protocol to URL: {value}")
+
+        # Log the final URL
+        logger.debug(f"Final URL after validation: {value}")
+        return value
+
+    def validate(self, attrs):
+        # Log the incoming data to help with debugging
+        logger.debug(f"DownloadTaskSerializer validate: {attrs}")
+
+        # Validate download_type
+        if 'download_type' in attrs and attrs['download_type'] not in dict(DownloadTask.TYPE_CHOICES):
+            raise serializers.ValidationError({"download_type": f"Invalid download type. Choose from: {[t[0] for t in DownloadTask.TYPE_CHOICES]}"})
+
+        # Validate frequency
+        if 'frequency' in attrs and attrs['frequency'] not in dict(DownloadTask.FREQUENCY_CHOICES):
+            raise serializers.ValidationError({"frequency": f"Invalid frequency. Choose from: {[f[0] for f in DownloadTask.FREQUENCY_CHOICES]}"})
+
+        # Add more validation as needed for other fields
+        return attrs

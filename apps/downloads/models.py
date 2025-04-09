@@ -35,7 +35,8 @@ class DownloadTask(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
-    url = models.URLField(max_length=2048)
+    # Change URLField to TextField to accept any string without validation
+    url = models.TextField(max_length=2048)
     download_type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     frequency = models.CharField(max_length=10, choices=FREQUENCY_CHOICES)
 
@@ -143,6 +144,9 @@ class DownloadTask(models.Model):
         self.save(update_fields=['next_run'])
         return next_run
 
+    class Meta:
+        app_label = 'downloads'
+
 
 class DownloadHistory(models.Model):
     """Model for tracking download history and details"""
@@ -174,3 +178,7 @@ class DownloadHistory(models.Model):
 
         duration = (self.completed_at - self.started_at).total_seconds()
         return duration
+
+    class Meta:
+        app_label = 'downloads'
+        verbose_name_plural = 'Download histories'

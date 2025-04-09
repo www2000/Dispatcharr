@@ -12,6 +12,7 @@ import json
 
 from .models import User
 from .serializers import UserSerializer, GroupSerializer, PermissionSerializer
+from django.middleware.csrf import get_token
 
 @csrf_exempt  # In production, consider CSRF protection strategies or ensure this endpoint is only accessible when no superuser exists.
 def initialize_superuser(request):
@@ -155,3 +156,13 @@ def list_permissions(request):
     permissions = Permission.objects.all()
     serializer = PermissionSerializer(permissions, many=True)
     return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_csrf_token(request):
+    """
+    Returns a CSRF token for clients to use in their requests.
+    This endpoint does not require authentication.
+    """
+    csrf_token = get_token(request)
+    return JsonResponse({'csrf_token': csrf_token})
