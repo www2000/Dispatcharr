@@ -132,14 +132,7 @@ const App = () => {
                         <Route path="/dvr" element={<DVR />} />
                         <Route path="/stats" element={<Stats />} />
                         <Route path="/settings" element={<Settings />} />
-                        <Route
-                          path="/downloads"
-                          element={
-                            <Protected>
-                              <DownloadManager />
-                            </Protected>
-                          }
-                        />
+                        <Route path="/downloads" element={<DownloadManager />} />
                       </>
                     ) : (
                       <Route path="/login" element={<Login needsSuperuser />} />

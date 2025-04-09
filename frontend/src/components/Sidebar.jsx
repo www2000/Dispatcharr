@@ -10,6 +10,7 @@ import {
   Copy,
   ChartLine,
   Video,
+  Download,
 } from 'lucide-react';
 import {
   Avatar,
@@ -88,6 +89,7 @@ const Sidebar = ({ collapsed, toggleDrawer, drawerWidth, miniDrawerWidth }) => {
       icon: <LucideSettings size={20} />,
       path: '/settings',
     },
+    { label: 'Downloads', icon: <Download size={20} />, path: '/downloads' },
   ];
 
   const copyPublicIP = async () => {
