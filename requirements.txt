@@ -23,7 +23,7 @@ rapidfuzz==3.12.1
 torch==2.6.0+cpu
 
 # ML/NLP dependencies
-sentence-transformers==3.4.1
+sentence-transformers==4.0.2
 channels
 channels-redis
 django-filter
