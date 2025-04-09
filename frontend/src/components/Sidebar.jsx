@@ -76,6 +76,7 @@ const Sidebar = ({ collapsed, toggleDrawer, drawerWidth, miniDrawerWidth }) => {
     },
     { label: 'M3U', icon: <Play size={20} />, path: '/m3u' },
     { label: 'EPG', icon: <Database size={20} />, path: '/epg' },
+    { label: 'Downloads', icon: <Download size={20} />, path: '/downloads' },
     {
       label: 'Stream Profiles',
       icon: <SlidersHorizontal size={20} />,
@@ -89,7 +90,7 @@ const Sidebar = ({ collapsed, toggleDrawer, drawerWidth, miniDrawerWidth }) => {
       icon: <LucideSettings size={20} />,
       path: '/settings',
     },
-    { label: 'Downloads', icon: <Download size={20} />, path: '/downloads' },
+
   ];
 
   const copyPublicIP = async () => {
