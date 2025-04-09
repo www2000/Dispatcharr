@@ -31,6 +31,7 @@ import API from './api';
 import { Notifications } from '@mantine/notifications';
 import M3URefreshNotification from './components/M3URefreshNotification';
 import 'allotment/dist/style.css';
+import DownloadManager from './pages/DownloadManager';
 
 const drawerWidth = 240;
 const miniDrawerWidth = 60;
@@ -131,6 +132,14 @@ const App = () => {
                         <Route path="/dvr" element={<DVR />} />
                         <Route path="/stats" element={<Stats />} />
                         <Route path="/settings" element={<Settings />} />
+                        <Route
+                          path="/downloads"
+                          element={
+                            <Protected>
+                              <DownloadManager />
+                            </Protected>
+                          }
+                        />
                       </>
                     ) : (
                       <Route path="/login" element={<Login needsSuperuser />} />

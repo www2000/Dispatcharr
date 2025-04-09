@@ -11,7 +11,7 @@ import useChannelsStore from './store/channels';
 import usePlaylistsStore from './store/playlists';
 import useEPGsStore from './store/epgs';
 
-export const WebsocketContext = createContext(false, null, () => {});
+export const WebsocketContext = createContext(false, null, () => { });
 
 export const WebsocketProvider = ({ children }) => {
   const [isReady, setIsReady] = useState(false);
@@ -139,6 +139,11 @@ export const WebsocketProvider = ({ children }) => {
             title: 'Recording finished!',
             message: `Stopped recording channel ${event.data.channel}`,
           });
+          break;
+
+        case 'download_status':
+          // Download status updates are handled in the DownloadManager component
+          setWsMessages(event.data);
           break;
 
         default:

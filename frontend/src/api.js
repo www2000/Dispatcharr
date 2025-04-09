@@ -155,8 +155,8 @@ export default class API {
         ...(channel.logo_file
           ? {}
           : {
-              'Content-Type': 'application/json',
-            }),
+            'Content-Type': 'application/json',
+          }),
       },
       body: body,
     });
@@ -220,8 +220,8 @@ export default class API {
         ...(values.logo_file
           ? {}
           : {
-              'Content-Type': 'application/json',
-            }),
+            'Content-Type': 'application/json',
+          }),
       },
       body: body,
     });
@@ -518,8 +518,8 @@ export default class API {
         ...(values.file
           ? {}
           : {
-              'Content-Type': 'application/json',
-            }),
+            'Content-Type': 'application/json',
+          }),
       },
       body,
     });
@@ -602,8 +602,8 @@ export default class API {
         ...(values.file
           ? {}
           : {
-              'Content-Type': 'application/json',
-            }),
+            'Content-Type': 'application/json',
+          }),
       },
       body,
     });
@@ -663,8 +663,8 @@ export default class API {
         ...(values.epg_file
           ? {}
           : {
-              'Content-Type': 'application/json',
-            }),
+            'Content-Type': 'application/json',
+          }),
       },
       body,
     });
@@ -704,8 +704,8 @@ export default class API {
         ...(values.epg_file
           ? {}
           : {
-              'Content-Type': 'application/json',
-            }),
+            'Content-Type': 'application/json',
+          }),
       },
       body,
     });
@@ -1142,5 +1142,88 @@ export default class API {
     });
 
     useChannelsStore.getState().fetchRecordings();
+  }
+
+  // Download Manager API methods
+  static async getDownloadTasks() {
+    const response = await fetch(`${host}/api/downloads/tasks/`, {
+      headers: {
+        Authorization: `Bearer ${await API.getAuthToken()}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    return await response.json();
+  }
+
+  static async getDownloadTask(id) {
+    const response = await fetch(`${host}/api/downloads/tasks/${id}/`, {
+      headers: {
+        Authorization: `Bearer ${await API.getAuthToken()}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    return await response.json();
+  }
+
+  static async createDownloadTask(values) {
+    const response = await fetch(`${host}/api/downloads/tasks/`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${await API.getAuthToken()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(values),
+    });
+
+    return await response.json();
+  }
+
+  static async updateDownloadTask(id, values) {
+    const response = await fetch(`${host}/api/downloads/tasks/${id}/`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${await API.getAuthToken()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(values),
+    });
+
+    return await response.json();
+  }
+
+  static async deleteDownloadTask(id) {
+    const response = await fetch(`${host}/api/downloads/tasks/${id}/`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${await API.getAuthToken()}`,
+      },
+    });
+
+    return response.ok;
+  }
+
+  static async triggerDownload(id) {
+    const response = await fetch(`${host}/api/downloads/tasks/${id}/trigger/`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${await API.getAuthToken()}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    return await response.json();
+  }
+
+  static async getDownloadTaskHistory(id) {
+    const response = await fetch(`${host}/api/downloads/tasks/${id}/history/`, {
+      headers: {
+        Authorization: `Bearer ${await API.getAuthToken()}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    return await response.json();
   }
 }
