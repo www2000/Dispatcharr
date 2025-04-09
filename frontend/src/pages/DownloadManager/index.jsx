@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Container,
     Group,
@@ -18,6 +18,7 @@ import {
     ScrollArea,
     Menu,
     rem,
+    Progress,  // Add Progress import
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
@@ -50,8 +51,8 @@ const formatSpeed = (speedBps) => {
     return `${speed.toFixed(2)} ${units[unitIndex]}`;
 };
 
-// Status badge component
-const StatusBadge = ({ status, speed }) => {
+// Status badge component with progress display
+const StatusBadge = ({ status, speed, progress }) => {
     const colorMap = {
         idle: 'blue',
         scheduled: 'yellow',
@@ -61,8 +62,10 @@ const StatusBadge = ({ status, speed }) => {
     };
 
     let content = status;
-    if (status === 'downloading' && speed) {
-        content = `Downloading (${formatSpeed(speed)})`;
+    if (status === 'downloading') {
+        const speedText = speed ? ` (${formatSpeed(speed)})` : '';
+        const progressText = progress !== null && progress !== undefined ? ` - ${progress}%` : '';
+        content = `Downloading${progressText}${speedText}`;
     }
 
     return (
@@ -93,47 +96,8 @@ export default function DownloadManager() {
 
     const { wsMessages } = useWebSocket();
 
-    // Handle WebSocket messages
-    useEffect(() => {
-        if (wsMessages && wsMessages.type === 'download_status') {
-            const { task_id, status, progress, speed, error } = wsMessages;
-
-            // Update task status
-            setTasks(prevTasks =>
-                prevTasks.map(task =>
-                    task.id === task_id
-                        ? {
-                            ...task,
-                            status,
-                            latest_history: {
-                                ...task.latest_history,
-                                status,
-                                download_speed: speed || task.latest_history?.download_speed,
-                                error_message: error || task.latest_history?.error_message
-                            }
-                        }
-                        : task
-                )
-            );
-
-            // Show notification for completed downloads
-            if (status === 'success' || status === 'failed') {
-                const task = tasks.find(t => t.id === task_id);
-                if (task) {
-                    notifications.show({
-                        title: status === 'success' ? 'Download Complete' : 'Download Failed',
-                        message: status === 'success'
-                            ? `Successfully downloaded ${task.name}`
-                            : `Failed to download ${task.name}: ${error}`,
-                        color: status === 'success' ? 'green' : 'red',
-                    });
-                }
-            }
-        }
-    }, [wsMessages]);
-
-    // Fetch download tasks
-    const fetchTasks = async () => {
+    // Fetch download tasks - Define this BEFORE any useEffect that depends on it
+    const fetchTasks = useCallback(async () => {
         try {
             setLoading(true);
             const data = await API.getDownloadTasks();
@@ -148,11 +112,55 @@ export default function DownloadManager() {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
+    // Initial data load
     useEffect(() => {
         fetchTasks();
-    }, []);
+    }, [fetchTasks]);
+
+    // Handle WebSocket messages
+    useEffect(() => {
+        if (wsMessages && wsMessages.type === 'download_status') {
+            const { task_id, status, progress, speed, error } = wsMessages;
+
+            console.log(`Received download status: ${status} for task ${task_id}`);
+
+            // Update task status immediately
+            setTasks(prevTasks =>
+                prevTasks.map(task =>
+                    task.id === task_id
+                        ? {
+                            ...task,
+                            status, // Update with the new status
+                            progress, // Add progress tracking
+                            latest_history: {
+                                ...task.latest_history,
+                                status,
+                                download_speed: speed || task.latest_history?.download_speed,
+                                error_message: error || task.latest_history?.error_message
+                            }
+                        }
+                        : task
+                )
+            );
+
+            // Show notification for completed downloads
+            if (status === 'success' || status === 'failed') {
+                const taskName = tasks.find(t => t.id === task_id)?.name || `Task ID: ${task_id}`;
+                notifications.show({
+                    title: status === 'success' ? 'Download Complete' : 'Download Failed',
+                    message: status === 'success'
+                        ? `Successfully downloaded ${taskName}`
+                        : `Failed to download ${taskName}: ${error || 'Unknown error'}`,
+                    color: status === 'success' ? 'green' : 'red',
+                });
+
+                // Refresh the tasks list to get the updated status
+                fetchTasks();
+            }
+        }
+    }, [wsMessages, tasks, fetchTasks]);
 
     // Form submission handler
     const handleSubmit = async (e) => {
@@ -461,10 +469,22 @@ export default function DownloadManager() {
                                         </Group>
                                     </td>
                                     <td>
-                                        <StatusBadge
-                                            status={task.status}
-                                            speed={task.latest_history?.download_speed}
-                                        />
+                                        <Stack spacing="xs">
+                                            <StatusBadge
+                                                status={task.status}
+                                                speed={task.latest_history?.download_speed}
+                                                progress={task.progress}
+                                            />
+                                            {task.status === 'downloading' && task.progress !== undefined && task.progress !== null && (
+                                                <Progress
+                                                    value={task.progress}
+                                                    size="sm"
+                                                    color="green"
+                                                    striped
+                                                    animate
+                                                />
+                                            )}
+                                        </Stack>
                                     </td>
                                     <td>
                                         {task.last_run ? (

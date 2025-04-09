@@ -86,7 +86,7 @@ def download_file(task_id):
             total_size = int(response.headers.get('content-length', 0))
             downloaded = 0
             last_update_time = start_time
-            update_interval = 1.0  # Update status every second
+            update_interval = 0.5  # Update status more frequently (every 500ms instead of 1s)
 
             with open(temp_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
@@ -134,11 +134,12 @@ def download_file(task_id):
         task.update_next_run()
         task.save(update_fields=['status', 'last_success', 'next_run'])
 
-        # Send final status update
+        # Send final status update with all information
         send_status_update(
             task_id=task.id,
             status='success',
-            speed=download_speed
+            speed=download_speed,
+            progress=100  # Ensure we show 100% completion
         )
 
         logger.info(f"Download successful for task {task.name} (ID: {task_id})")
@@ -166,11 +167,12 @@ def download_file(task_id):
         task.update_next_run()
         task.save(update_fields=['status', 'last_failure', 'next_run'])
 
-        # Send error status
+        # Send error status with all information
         send_status_update(
             task_id=task.id,
             status='failed',
-            error=str(e)
+            error=str(e),
+            progress=0  # Reset progress on failure
         )
 
         return f"Download failed for task {task_id}: {str(e)}"
