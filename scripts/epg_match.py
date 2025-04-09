@@ -8,7 +8,7 @@ from sentence_transformers import util
 from sentence_transformers import SentenceTransformer as st
 
 SENTENCE_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-MODEL_PATH = os.path.join("/app/media", "models", "all-MiniLM-L6-v2")
+MODEL_PATH = os.path.join("/app", "models", "all-MiniLM-L6-v2")
 
 BEST_FUZZY_THRESHOLD = 85
 LOWER_FUZZY_THRESHOLD = 40
